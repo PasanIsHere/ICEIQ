@@ -1,6 +1,9 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/server.mjs": { "maxDuration": 60 }
+  },
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/server" },
     { "source": "/nhl-api/:path*", "destination": "/api/server" }

@@ -171,7 +171,7 @@ app.get('/api/standings', async (req, res) => {
 });
 
 // ── NHL API proxy ─────────────────────────────────────────────────────────────
-app.get('/nhl-api/*', async (req, res) => {
+app.get('/nhl-api/*path', async (req, res) => {
   const path = req.path.replace('/nhl-api', '');
   const qs = new URLSearchParams(req.query).toString();
   const url = `https://api-web.nhle.com${path}${qs ? '?' + qs : ''}`;
