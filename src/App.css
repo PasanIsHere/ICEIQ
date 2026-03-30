@@ -343,7 +343,8 @@
 }
 .drop-icon { font-size: 1.1rem; opacity: 0.5; }
 .drop-hint { font-size: 11px; color: var(--text-3); opacity: 0.6; }
-.drop-preview { max-height: 120px; max-width: 100%; border-radius: 3px; object-fit: contain; }
+.drop-previews { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; width: 100%; }
+.drop-preview { max-height: 100px; max-width: 160px; border-radius: 3px; object-fit: contain; }
 .drop-overlay {
   position: absolute; inset: 0; background: rgba(9,9,13,0.75);
   display: flex; align-items: center; justify-content: center;

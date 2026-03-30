@@ -111,61 +111,69 @@ export default function ScreenshotImport({ allNames, onMatch, onClear, active }:
   const [matchedList, setMatchedList] = useState<string[]>([]);
   const [rawOcr, setRawOcr] = useState('');
   const [showRaw, setShowRaw] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const allMatchedRef = useRef<Set<string>>(new Set());
 
-  async function handleFile(file: File) {
-    if (preview) URL.revokeObjectURL(preview);
-    setPreview(URL.createObjectURL(file));
+  async function processFiles(files: File[]) {
+    const imageFiles = files.filter((f) => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+
     setLoading(true);
-    setStatus('Reading image…');
-    setMatchedList([]);
     setRawOcr('');
 
-    try {
-      const worker = await createWorker('eng', 1, {
-        workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/worker.min.js',
-        langPath: 'https://tessdata.projectnaptha.com/4.0.0',
-        corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/tesseract-core-simd.wasm.js',
-        logger: (m) => {
-          if (m.status === 'recognizing text') {
-            setStatus(`OCR: ${Math.round(m.progress * 100)}%`);
-          }
-        },
-      });
+    const newPreviews = imageFiles.map((f) => URL.createObjectURL(f));
+    setPreviews((prev) => [...prev, ...newPreviews]);
 
-      const { data: { text } } = await worker.recognize(file);
-      await worker.terminate();
-
-      setRawOcr(text);
-      const found = matchNamesInOCR(text, allNames);
-
-      if (found.length === 0) {
-        setStatus('No player names detected. Check raw OCR below to see what was read.');
-      } else {
-        setStatus(`Found ${found.length} player${found.length !== 1 ? 's' : ''}`);
-        setMatchedList(found);
-        onMatch(found);
+    let combinedRaw = '';
+    for (let i = 0; i < imageFiles.length; i++) {
+      setStatus(`Processing image ${i + 1} of ${imageFiles.length}…`);
+      try {
+        const worker = await createWorker('eng', 1, {
+          workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/worker.min.js',
+          langPath: 'https://tessdata.projectnaptha.com/4.0.0',
+          corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/tesseract-core-simd.wasm.js',
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              setStatus(`Image ${i + 1}/${imageFiles.length} — OCR: ${Math.round(m.progress * 100)}%`);
+            }
+          },
+        });
+        const { data: { text } } = await worker.recognize(imageFiles[i]);
+        await worker.terminate();
+        combinedRaw += (combinedRaw ? '\n\n---\n\n' : '') + text;
+        const found = matchNamesInOCR(text, allNames);
+        for (const n of found) allMatchedRef.current.add(n);
+      } catch {
+        // skip failed image, continue with rest
       }
-    } catch {
-      setStatus('OCR failed. Try a higher-resolution image.');
+    }
+
+    setRawOcr(combinedRaw);
+    const total = Array.from(allMatchedRef.current);
+    if (total.length === 0) {
+      setStatus('No player names detected. Check raw OCR below.');
+    } else {
+      setStatus(`Found ${total.length} player${total.length !== 1 ? 's' : ''} across ${previews.length + imageFiles.length} image${previews.length + imageFiles.length !== 1 ? 's' : ''}`);
+      setMatchedList(total);
+      onMatch(total);
     }
     setLoading(false);
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file?.type.startsWith('image/')) handleFile(file);
+    processFiles(Array.from(e.dataTransfer.files));
   }
 
   function handleClear() {
-    if (preview) URL.revokeObjectURL(preview);
-    setPreview(null);
+    previews.forEach((p) => URL.revokeObjectURL(p));
+    setPreviews([]);
     setStatus('');
     setMatchedList([]);
     setRawOcr('');
     setShowRaw(false);
+    allMatchedRef.current = new Set();
     onClear();
     if (inputRef.current) inputRef.current.value = '';
   }
@@ -196,13 +204,17 @@ export default function ScreenshotImport({ allNames, onMatch, onClear, active }:
         onDragOver={(e) => e.preventDefault()}
         onClick={() => !loading && inputRef.current?.click()}
       >
-        {preview ? (
-          <img src={preview} alt="preview" className="drop-preview" />
+        {previews.length > 0 ? (
+          <div className="drop-previews">
+            {previews.map((src, i) => (
+              <img key={i} src={src} alt={`preview ${i + 1}`} className="drop-preview" />
+            ))}
+          </div>
         ) : (
           <div className="drop-placeholder">
             <span className="drop-icon">⬆</span>
-            <span>Drop a screenshot or click to upload</span>
-            <span className="drop-hint">PNG · JPG · WEBP — expects "First Last" format</span>
+            <span>Drop screenshots or click to upload</span>
+            <span className="drop-hint">PNG · JPG · WEBP — multiple files supported</span>
           </div>
         )}
         {loading && <div className="drop-overlay"><div className="spinner" /></div>}
@@ -212,8 +224,9 @@ export default function ScreenshotImport({ allNames, onMatch, onClear, active }:
         ref={inputRef}
         type="file"
         accept="image/*"
+        multiple
         style={{ display: 'none' }}
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+        onChange={(e) => { if (e.target.files?.length) processFiles(Array.from(e.target.files)); }}
       />
 
       {status && (
