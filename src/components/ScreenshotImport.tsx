@@ -124,6 +124,9 @@ export default function ScreenshotImport({ allNames, onMatch, onClear, active }:
 
     try {
       const worker = await createWorker('eng', 1, {
+        workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/worker.min.js',
+        langPath: 'https://tessdata.projectnaptha.com/4.0.0',
+        corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/tesseract-core-simd.wasm.js',
         logger: (m) => {
           if (m.status === 'recognizing text') {
             setStatus(`OCR: ${Math.round(m.progress * 100)}%`);
